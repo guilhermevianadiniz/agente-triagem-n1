@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agente N1 - Triagem Automática</title>
+<style>
+:root{--bg:#0b1020;--panel:#121a2d;--panel2:#18233b;--text:#e8edf7;--muted:#9eabc2;--accent:#5b8cff;--danger:#ff647c;--ok:#42d392;--warn:#f4c95d;--border:#293754}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,Segoe UI,Arial}
+header{padding:20px 28px;border-bottom:1px solid var(--border);background:#0e1527}
+h1,h2,h3{margin-top:0}header h1{margin-bottom:4px;font-size:22px}header p{margin:0;color:var(--muted)}
+.wrap{max-width:1400px;margin:auto;padding:22px}
+.grid{display:grid;grid-template-columns:360px 1fr;gap:18px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 8px 30px #0002}
+label{display:block;margin:12px 0 6px;color:#cbd5e8;font-weight:600}
+input,textarea,select{width:100%;background:#0d1425;color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px}
+textarea{min-height:180px;resize:vertical}
+button{border:0;border-radius:9px;padding:10px 14px;background:var(--accent);color:white;font-weight:700;cursor:pointer}
+button.secondary{background:#273552}button.danger{background:#b8324a}
+button:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap}.status{padding:10px;border-radius:9px;background:#0d1425;color:var(--muted);margin-bottom:12px}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700}
+.p1{background:#7d2030}.p2{background:#81551a}.p3{background:#1e5370}.p4{background:#315a43}.provisoria{background:#5a4a1c}
+pre,.output{white-space:pre-wrap;word-break:break-word;background:#0a1120;border:1px solid var(--border);padding:15px;border-radius:10px}
+.hidden{display:none}.small{font-size:12px;color:var(--muted)}.metric{display:inline-flex;flex-direction:column;background:var(--panel2);padding:12px;border-radius:10px;min-width:130px;margin:4px}.metric b{font-size:20px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid var(--border);vertical-align:top}
+.notice{border-left:4px solid var(--warn);padding:10px;background:#241f10}.ok{border-left-color:var(--ok)}.err{border-left-color:var(--danger)}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Agente de Inteligência Artificial — Triagem N1</h1>
+  <p>Autenticação → Sanitização → Evidências → Prioridade → Diagnóstico → Escalonamento → Auditoria</p>
+</header>
+
+<div class="wrap">
+<div class="grid">
+<section class="card">
+  <h2>Autenticação</h2>
+  <div id="authStatus" class="status">Sessão não autenticada.</div>
+  <label for="password">Senha</label>
+  <input id="password" type="password" autocomplete="off">
+  <label for="token">Token/API</label>
+  <input id="token" type="password" autocomplete="off">
+  <div class="row" style="margin-top:14px">
+    <button id="loginBtn">Autenticar</button>
+    <button id="logoutBtn" class="danger" disabled>Logout</button>
+  </div>
+  <p class="small">Os campos de autenticação não são exibidos nos resultados. Nesta versão demonstrativa, os valores ficam no JavaScript do navegador; para produção, use um backend e um cofre de segredos.</p>
+
+  <hr style="border-color:var(--border);margin:20px 0">
+
+  <h3>Comando de saída</h3>
+  <div class="notice"><b>vaca5.1</b> encerra a sessão atual e bloqueia novas triagens até nova autenticação.</div>
+</section>
+
+<section class="card">
+  <h2>Triagem de Ticket</h2>
+  <div id="ticketStatus" class="status">Autentique-se para habilitar o processamento.</div>
+
+  <label for="ticketId">ID do ticket</label>
+  <input id="ticketId" placeholder="Ex.: INC-2026-001">
+
+  <label for="ticket">Conteúdo do ticket</label>
+  <textarea id="ticket" placeholder="Cole aqui o ticket. Credenciais detectadas serão substituídas por [credencial_oculta] antes da análise exibida."></textarea>
+
+  <div class="row" style="margin-top:12px">
+    <button id="triageBtn" disabled>Processar triagem</button>
+    <button id="clearBtn" class="secondary">Limpar</button>
+  </div>
+
+  <div id="result" class="hidden" style="margin-top:18px"></div>
+</section>
+</div>
+
+<section class="card" style="margin-top:18px">
+  <h2>KPIs locais da demonstração</h2>
+  <div id="metrics"></div>
+  <p class="small">Os indicadores abaixo usam apenas o histórico armazenado no localStorage deste navegador. Não representam métricas corporativas reais.</p>
+</section>
+
+<section class="card" style="margin-top:18px">
+  <h2>Auditoria local</h2>
+  <div id="audit"></div>
+</section>
+</div>
+
+<script>
+/*
+ DEMONSTRAÇÃO LOCAL.
+ Para produção:
+ - mover autenticação para servidor;
+ - guardar segredos em Secret Manager/Vault;
+ - usar sessão/cookie seguro;
+ - sanitizar também no servidor;
+ - consultar somente fontes autorizadas;
+ - registrar auditoria sem segredos.
+*/
+
+const AUTH_PASSWORD = "123456";
+const AUTH_TOKEN = "luis";
+const LOGOUT_COMMAND = "vaca5.1";
+const CREDENTIAL_PLACEHOLDER = "[credencial_oculta]";
+const INFRA_PLACEHOLDER = "[infraestrutura_oculta]";
+
+let authenticated = false;
+let sessionId = null;
+
+const $ = id => document.getElementById(id);
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function now(){ return new Date().toLocaleString("pt-BR"); }
+
+function loadData(){
+  return JSON.parse(localStorage.getItem("n1_triage_data") || '{"tickets":[],"audit":[]}');
+}
+function saveData(d){ localStorage.setItem("n1_triage_data", JSON.stringify(d)); }
+
+function audit(action, detail=""){
+  const d=loadData();
+  d.audit.unshift({time:now(),action,detail:detail.replaceAll(AUTH_PASSWORD,CREDENTIAL_PLACEHOLDER).replaceAll(AUTH_TOKEN,CREDENTIAL_PLACEHOLDER)});
+  d.audit=d.audit.slice(0,100);
+  saveData(d);
+  renderAudit();
+}
+
+function setAuthState(ok){
+  authenticated=ok;
+  sessionId=ok ? crypto.randomUUID() : null;
+  $("loginBtn").disabled=ok;
+  $("logoutBtn").disabled=!ok;
+  $("triageBtn").disabled=!ok;
+  $("password").disabled=ok;
+  $("token").disabled=ok;
+  $("authStatus").textContent=ok ? "Sessão autenticada." : "Sessão não autenticada.";
+  $("authStatus").className="status "+(ok?"notice ok":"");
+  $("ticketStatus").textContent=ok ? "Pronto para receber e processar tickets." : "Autentique-se para habilitar o processamento.";
+}
+
+function authenticate(){
+  const p=$("password").value, t=$("token").value;
+  if(p===AUTH_PASSWORD && t===AUTH_TOKEN){
+    setAuthState(true);
+    $("password").value=""; $("token").value="";
+    audit("AUTH_SUCCESS","Sessão autenticada.");
+  } else {
+    setAuthState(false);
+    audit("AUTH_FAILURE","Autenticação recusada.");
+    alert("Autenticação recusada. O processamento do ticket não será iniciado.");
+  }
+}
+
+function logout(){
+  if(!authenticated) return;
+  authenticated=false; sessionId=null;
+  $("loginBtn").disabled=false; $("logoutBtn").disabled=true; $("triageBtn").disabled=true;
+  $("password").disabled=false; $("token").disabled=false;
+  $("authStatus").textContent="Sessão encerrada. O agente foi deslogado.";
+  $("ticketStatus").textContent="Nova triagem exige autenticação.";
+  audit("LOGOUT","Sessão encerrada.");
+}
+
+function sanitize(text){
+  let masked=text, credentialCount=0, infraCount=0;
+
+  const patterns=[
+    /\bBearer\s+[A-Za-z0-9._~+\/=-]{12,}/gi,
+    /\b(?:api[_-]?key|apikey|token|secret|password|passwd|senha|credential|credencial|jwt)\s*[:=]\s*["']?([A-Za-z0-9_\-.~+/=]{6,})["']?/gi,
+    /\b(?:AKIA|ASIA)[A-Z0-9]{12,}/g,
+    /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+    /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g
+  ];
+  patterns.forEach(rx=>{
+    masked=masked.replace(rx,()=>{credentialCount++;return CREDENTIAL_PLACEHOLDER;});
+  });
+
+  // IPs privados e hostnames internos: ocultados de forma conservadora.
+  masked=masked.replace(/\b(?:10\.(?:\d{1,3}\.){2}\d{1,3}|192\.168\.(?:\d{1,3})\.(?:\d{1,3})|172\.(?:1[6-9]|2\d|3[0-1])\.(?:\d{1,3})\.(?:\d{1,3}))\b/g,
+    ()=>{infraCount++;return INFRA_PLACEHOLDER;});
+
+  masked=masked.replace(/\b(?:https?:\/\/)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:internal|local|corp|lan)\b/gi,
+    ()=>{infraCount++;return INFRA_PLACEHOLDER;});
+
+  return {masked,credentialCount,infraCount};
+}
+
+function classify(text){
+  const lower=text.toLowerCase();
+  const security=/(ransomware|malware|phishing|vazamento|comprometimento|acesso não autorizado|acesso nao autorizado|incidente de segurança|incidente de seguranca)/i.test(lower);
+  const broad=/(todos os usuários|todos os usuarios|empresa inteira|toda a empresa|indisponível para todos|indisponivel para todos|serviço inteiro|servico inteiro)/i.test(lower);
+  const outage=/(fora do ar|indisponível|indisponivel|down|parado|não funciona|nao funciona)/i.test(lower);
+  const multi=/(usuários|usuarios|equipe|departamento|vários|varios)/i.test(lower);
+
+  if(security && broad) return {priority:"P1", impact:"Potencial impacto crítico, conforme evidências relatadas.", urgency:"Alta"};
+  if(broad && outage) return {priority:"P1", impact:"Indisponibilidade ampla relatada.", urgency:"Alta"};
+  if(security || (multi && outage)) return {priority:"P2", impact:"Impacto elevado relatado, sem evidência suficiente para P1.", urgency:"Alta"};
+  if(outage) return {priority:"P3", impact:"Indisponibilidade relatada, alcance ainda não confirmado.", urgency:"Média"};
+  if(lower.length<40 || /(dúvida|duvida|melhoria|solicitação|solicitacao)/i.test(lower))
+    return {priority:"P4", impact:"Baixo ou não operacionalmente relevante com as informações disponíveis.", urgency:"Baixa"};
+  return {priority:"Provisória", impact:"Não há evidência suficiente para determinar o impacto com segurança.", urgency:"Não determinada"};
+}
+
+function problems(text){
+  const parts=text.split(/\n+|(?<=[.!?])\s+(?=[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ])/).map(x=>x.trim()).filter(Boolean);
+  if(parts.length<=1) return [text.trim()];
+  return parts.slice(0,8);
+}
+
+function evidence(text){
+  const confirmed=[];
+  const reported=[];
+  const missing=[];
+  if(text.trim()) reported.push("O conteúdo foi fornecido pelo operador/usuário no ticket.");
+  if(!/quando|desde|horário|horario|data/i.test(text)) missing.push("Momento de início ou ocorrência do problema.");
+  if(!/erro|código|codigo|mensagem|status|http/i.test(text)) missing.push("Mensagem/código de erro ou evidência objetiva do comportamento.");
+  if(!/usuário|usuario|pessoa|clientes|cliente|equipe/i.test(text)) missing.push("Quantidade/alcance de usuários afetados.");
+  if(!/ambiente|produção|producao|homologação|homologacao|teste/i.test(text)) missing.push("Ambiente afetado.");
+  return {confirmed,reported,missing};
+}
+
+function sourceNote(){ return "Ticket fornecido pelo operador. Nenhuma base de conhecimento externa foi consultada nesta versão local."; }
+
+function triage(){
+  if(!authenticated){ alert("Autenticação recusada. O processamento do ticket não será iniciado."); return; }
+  const raw=$("ticket").value.trim();
+  if(!raw){ alert("Informe o conteúdo do ticket."); return; }
+
+  const start=performance.now();
+  const s=sanitize(raw);
+  const c=classify(s.masked);
+  const ev=evidence(s.masked);
+  const ps=problems(s.masked);
+  const id=$("ticketId").value.trim() || "SEM-ID";
+  const duration=Math.round(performance.now()-start);
+
+  const problemHtml=ps.map((p,i)=>`
+    <h3>Problema ${i+1}</h3>
+    <p><b>Descrição:</b> ${escapeHtml(p)}</p>
+    <p><b>Prioridade:</b> <span class="badge ${c.priority.toLowerCase().replace("ó","o").replace("í","i")}">${c.priority}</span></p>
+    <p><b>Evidências:</b> Informação relatada no ticket. Nenhuma evidência externa foi confirmada.</p>
+    <p><b>Solução documentada:</b> Não disponível nesta versão sem consulta a uma base autorizada.</p>
+    <p><b>Diagnóstico N1:</b></p>
+    <ol>
+      <li>Confirmar o ambiente afetado e o alcance do impacto.</li>
+      <li>Coletar mensagem/código de erro e horário da ocorrência.</li>
+      <li>Reproduzir o comportamento, se permitido pelo procedimento interno.</li>
+      <li>Comparar o resultado com procedimento documentado da organização.</li>
+    </ol>
+    <p><b>Informações adicionais necessárias:</b> ambiente, alcance, horário e evidência objetiva, quando ausentes.</p>
+    <p><b>Escalonamento:</b> Se os critérios oficiais de escalonamento forem atingidos ou não houver procedimento autorizado para continuidade.</p>
+  `).join("");
+
+  $("result").classList.remove("hidden");
+  $("result").innerHTML=`
+    <div class="notice ${s.credentialCount?"ok":""}">
+      <b>Sanitização concluída.</b>
+      Credenciais detectadas: ${s.credentialCount?"Sim":"Não"} |
+      Credenciais mascaradas: ${s.credentialCount?"Sim":"Não"} |
+      Infraestrutura mascarada: ${s.infraCount?"Sim":"Não"}
+    </div>
+
+    <h2>TRIAGEM DO TICKET</h2>
+    <table>
+      <tr><th>Status</th><td>Processado</td></tr>
+      <tr><th>Categoria</th><td>Suporte técnico / triagem N1</td></tr>
+      <tr><th>Prioridade</th><td><span class="badge ${c.priority.toLowerCase().replace("ó","o").replace("í","i")}">${c.priority}</span></td></tr>
+      <tr><th>Impacto</th><td>${escapeHtml(c.impact)}</td></tr>
+      <tr><th>Urgência</th><td>${escapeHtml(c.urgency)}</td></tr>
+      <tr><th>Quantidade de problemas</th><td>${ps.length}</td></tr>
+    </table>
+
+    <h2 style="margin-top:20px">SEGURANÇA</h2>
+    <p><b>Credenciais detectadas:</b> ${s.credentialCount?"Sim":"Não"}</p>
+    <p><b>Credenciais mascaradas:</b> ${s.credentialCount?"Sim":"Não"}</p>
+    ${s.credentialCount?`<p>${CREDENTIAL_PLACEHOLDER}</p>`:""}
+
+    <h2>EVIDÊNCIAS</h2>
+    <p><b>Informações confirmadas</b></p>
+    <ul>${ev.confirmed.length?ev.confirmed.map(x=>`<li>${escapeHtml(x)}</li>`).join(""):"<li>Nenhuma confirmação externa disponível.</li>"}</ul>
+    <p><b>Informações relatadas pelo usuário</b></p>
+    <ul>${ev.reported.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}</ul>
+    <p><b>Informações não validadas</b></p>
+    <ul><li>Identidade de sistemas, causa raiz e impacto real não foram validados por fonte externa.</li></ul>
+    <p><b>Hipóteses</b></p>
+    <ul><li>Não transformar hipóteses em fatos. Investigar conforme procedimento autorizado.</li></ul>
+    <p><b>Informações ausentes</b></p>
+    <ul>${ev.missing.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}</ul>
+
+    <h2>SOLUÇÃO PARA CADA PROBLEMA</h2>
+    ${problemHtml}
+
+    <h2>ROTEIRO N1</h2>
+    <ol>
+      <li>Validar o alcance do incidente e o ambiente afetado.</li>
+      <li>Coletar horário, mensagem/código de erro e passos para reprodução.</li>
+      <li>Consultar a base de conhecimento/procedimento oficial correspondente.</li>
+      <li>Executar somente ações autorizadas e documentadas.</li>
+      <li>Registrar o resultado de cada teste.</li>
+      <li>Escalonar quando os critérios oficiais forem atingidos ou quando faltar procedimento autorizado.</li>
+    </ol>
+
+    <h2>ESCALONAMENTO</h2>
+    <p><b>Necessita escalonamento:</b> Provisório / depende da coleta das informações ausentes.</p>
+    <p><b>Motivo:</b> A versão local não possui acesso a uma base de conhecimento ou ferramenta interna autorizada.</p>
+    <p><b>Informação necessária:</b> ${ev.missing.length?escapeHtml(ev.missing.join("; ")): "Confirmar critérios oficiais de escalonamento."}</p>
+    <p><b>Equipe responsável:</b> Não determinada, pois nenhuma fonte autorizada foi consultada.</p>
+
+    <h2>FONTES UTILIZADAS</h2>
+    <ul><li>${escapeHtml(sourceNote())}</li></ul>
+
+    <h2>Ticket sanitizado</h2>
+    <div class="output">${escapeHtml(s.masked)}</div>
+    <p class="small">Tempo local de triagem: ${duration} ms. Isso mede apenas o processamento do navegador.</p>
+  `;
+
+  const d=loadData();
+  d.tickets.unshift({
+    id, time:now(), priority:c.priority, problems:ps.length,
+    credentials:s.credentialCount, duration, escalated:true
+  });
+  d.tickets=d.tickets.slice(0,500);
+  saveData(d);
+  audit("TICKET_TRIAGED",`Ticket ${id}; prioridade ${c.priority}; ${ps.length} problema(s); ${s.credentialCount} credencial(is) mascarada(s).`);
+  renderMetrics();
+}
+
+function renderMetrics(){
+  const d=loadData(), t=d.tickets;
+  const count=p=>t.filter(x=>x.priority===p).length;
+  $("metrics").innerHTML=[
+    ["Tickets recebidos",t.length],
+    ["Triados",t.length],
+    ["P1",count("P1")],["P2",count("P2")],["P3",count("P3")],["P4",count("P4")],
+    ["Provisórios",count("Provisória")],
+    ["Credenciais mascaradas",t.reduce((a,x)=>a+x.credentials,0)],
+    ["Escalonamentos indicados",t.filter(x=>x.escalated).length]
+  ].map(([a,b])=>`<span class="metric"><span>${a}</span><b>${b}</b></span>`).join("");
+}
+function renderAudit(){
+  const d=loadData();
+  $("audit").innerHTML=d.audit.length?`
+    <table><thead><tr><th>Data</th><th>Ação</th><th>Detalhe</th></tr></thead><tbody>
+    ${d.audit.slice(0,30).map(x=>`<tr><td>${escapeHtml(x.time)}</td><td>${escapeHtml(x.action)}</td><td>${escapeHtml(x.detail)}</td></tr>`).join("")}
+    </tbody></table>`:"<p class='small'>Nenhum evento registrado.</p>";
+}
+
+$("loginBtn").onclick=authenticate;
+$("logoutBtn").onclick=logout;
+$("triageBtn").onclick=triage;
+$("clearBtn").onclick=()=>{$("ticket").value="";$("ticketId").value="";$("result").classList.add("hidden");};
+
+$("ticket").addEventListener("input",()=>{
+  // O comando de logout é verificado apenas como comando isolado.
+  if($("ticket").value.trim()===LOGOUT_COMMAND && authenticated){
+    $("ticket").value="";
+    logout();
+    $("result").classList.add("hidden");
+  }
+});
+
+renderMetrics(); renderAudit(); setAuthState(false);
+</script>
+</body>
+</html>
