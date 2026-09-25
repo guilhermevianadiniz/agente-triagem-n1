@@ -11,6 +11,7 @@
             --secondary: #34495e;
             --accent: #3498db;
             --danger: #e74c3c;
+            --success: #27ae60;
             --text-main: #333;
             --text-light: #fff;
             --border: #ccc;
@@ -74,6 +75,40 @@
         .btn-danger:hover {
             background-color: #c0392b;
         }
+        
+        /* SISTEMA DE ABAS (LOGIN/CADASTRO) */
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+        }
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            color: var(--secondary);
+            transition: 0.3s;
+        }
+        .tab.active {
+            border-bottom: 3px solid var(--accent);
+            color: var(--accent);
+        }
+        .auth-form {
+            display: none;
+        }
+        .auth-form.active {
+            display: block;
+        }
+        .msg {
+            margin-top: 10px;
+            font-weight: bold;
+            display: none;
+        }
+        .msg.error { color: var(--danger); }
+        .msg.success { color: var(--success); }
+
         #app-section, #result-section {
             display: none;
         }
@@ -110,33 +145,58 @@
 
 <div class="container">
     
-    <!-- CAMADA DE AUTENTICAÇÃO -->
+    <!-- CAMADA DE AUTENTICAÇÃO E CADASTRO -->
     <div id="auth-section">
-        <h1>🔒 Autenticação do Agente N1</h1>
-        <p>Insira as credenciais autorizadas para iniciar o motor de triagem.</p>
-        <div class="form-group">
-            <label for="pass">Senha de Autenticação:</label>
-            <input type="password" id="pass" placeholder="Digite a senha">
+        <h1>🔒 Acesso ao Agente N1</h1>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('login')">Entrar</div>
+            <div class="tab" onclick="switchTab('register')">Cadastrar</div>
         </div>
-        <div class="form-group">
-            <label for="token">Token/API:</label>
-            <input type="password" id="token" placeholder="Digite o token">
+
+        <!-- FORMULÁRIO DE LOGIN -->
+        <div id="login-form" class="auth-form active">
+            <p>Insira suas credenciais para iniciar o motor de triagem.</p>
+            <div class="form-group">
+                <label for="login-user">Usuário:</label>
+                <input type="text" id="login-user" placeholder="Digite seu usuário">
+            </div>
+            <div class="form-group">
+                <label for="login-pass">Senha:</label>
+                <input type="password" id="login-pass" placeholder="Digite sua senha">
+            </div>
+            <button onclick="login()">Entrar</button>
+            <p id="login-msg" class="msg"></p>
         </div>
-        <button onclick="authenticate()">Autenticar</button>
-        <p id="auth-error" style="color: var(--danger); font-weight: bold; display: none;">Autenticação recusada. O processamento do ticket não será iniciado.</p>
+
+        <!-- FORMULÁRIO DE CADASTRO -->
+        <div id="register-form" class="auth-form">
+            <p>Crie um novo usuário para acessar o sistema.</p>
+            <div class="form-group">
+                <label for="reg-user">Novo Usuário:</label>
+                <input type="text" id="reg-user" placeholder="Crie um nome de usuário">
+            </div>
+            <div class="form-group">
+                <label for="reg-pass">Nova Senha:</label>
+                <input type="password" id="reg-pass" placeholder="Crie uma senha">
+            </div>
+            <button onclick="register()">Cadastrar</button>
+            <p id="reg-msg" class="msg"></p>
+        </div>
     </div>
 
     <!-- CAMADA DE ENTRADA DO TICKET -->
     <div id="app-section">
         <div class="header-actions">
             <h1>📥 Triagem de Ticket</h1>
-            <button class="btn-danger" onclick="logout()">Deslogar (vaca)</button>
+            <button class="btn-danger" onclick="logout()">Sair</button>
         </div>
-        <p>Cole o conteúdo do ticket abaixo. O sistema protegerá informações sensíveis e gerará o roteiro automaticamente.</p>
+        <p>Bem-vindo, <strong id="logged-user-name"></strong>! Cole o conteúdo do ticket abaixo.</p>
         <p><em>Dica: Para forçar o logout por comando, digite apenas a palavra <strong>vaca</strong> no ticket e processe.</em></p>
         <div class="form-group">
             <label for="ticket-content">Conteúdo do Ticket:</label>
             <textarea id="ticket-content" placeholder="Ex: O sistema está fora do ar e quando tento acessar aparece erro. Minha senha é 12345abcd..."></textarea>
+            <p id="ticket-msg" class="msg"></p>
         </div>
         <button onclick="processTicket()">Analisar e Triar</button>
     </div>
@@ -153,40 +213,111 @@
 </div>
 
 <script>
-    // --- PILAR 2 & 5: AUTENTICAÇÃO SEGURA ---
-    // (Em um ambiente real, esta validação ocorreria puramente no backend. 
-    // Como solicitado um programa em HTML, a lógica está isolada aqui.)
-    const SECRET_CONFIG_PASSWORD = "123456";
-    const SECRET_CONFIG_TOKEN = "luis";
     const LOGOUT_COMMAND = "vaca";
+    let currentUser = "";
 
-    function authenticate() {
-        const pass = document.getElementById('pass').value;
-        const token = document.getElementById('token').value;
-        const errorMsg = document.getElementById('auth-error');
+    // FUNÇÕES DE BANCO DE DADOS (LOCALSTORAGE)
+    function getUsers() {
+        return JSON.parse(localStorage.getItem('n1_users')) || {};
+    }
 
-        if (pass === SECRET_CONFIG_PASSWORD && token === SECRET_CONFIG_TOKEN) {
+    function saveUsers(users) {
+        localStorage.setItem('n1_users', JSON.stringify(users));
+    }
+
+    // ALTERNAR ENTRE LOGIN E CADASTRO
+    function switchTab(tab) {
+        document.getElementById('login-form').classList.remove('active');
+        document.getElementById('register-form').classList.remove('active');
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        hideMessages();
+
+        if (tab === 'login') {
+            document.getElementById('login-form').classList.add('active');
+            document.querySelectorAll('.tab')[0].classList.add('active');
+        } else {
+            document.getElementById('register-form').classList.add('active');
+            document.querySelectorAll('.tab')[1].classList.add('active');
+        }
+    }
+
+    // MENSAGENS NA TELA
+    function showMessage(elementId, text, isError = true) {
+        const el = document.getElementById(elementId);
+        el.textContent = text;
+        el.className = 'msg ' + (isError ? 'error' : 'success');
+        el.style.display = 'block';
+    }
+
+    function hideMessages() {
+        document.querySelectorAll('.msg').forEach(el => el.style.display = 'none');
+    }
+
+    // SISTEMA DE CADASTRO
+    function register() {
+        hideMessages();
+        const user = document.getElementById('reg-user').value.trim();
+        const pass = document.getElementById('reg-pass').value.trim();
+
+        if (!user || !pass) {
+            showMessage('reg-msg', 'Preencha todos os campos.', true);
+            return;
+        }
+
+        const users = getUsers();
+        if (users[user]) {
+            showMessage('reg-msg', 'Este usuário já existe! Escolha outro.', true);
+            return;
+        }
+
+        users[user] = pass;
+        saveUsers(users);
+        showMessage('reg-msg', 'Cadastro realizado com sucesso! Faça login.', false);
+        
+        document.getElementById('reg-user').value = '';
+        document.getElementById('reg-pass').value = '';
+        
+        setTimeout(() => switchTab('login'), 1500); // Muda para a aba de login após 1.5s
+    }
+
+    // SISTEMA DE LOGIN
+    function login() {
+        hideMessages();
+        const user = document.getElementById('login-user').value.trim();
+        const pass = document.getElementById('login-pass').value.trim();
+
+        if (!user || !pass) {
+            showMessage('login-msg', 'Preencha usuário e senha.', true);
+            return;
+        }
+
+        const users = getUsers();
+        
+        // Verifica se a senha bate com a do usuário salvo
+        if (users[user] && users[user] === pass) {
+            currentUser = user;
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('app-section').style.display = 'block';
-            errorMsg.style.display = 'none';
-            document.getElementById('pass').value = '';
-            document.getElementById('token').value = '';
+            document.getElementById('logged-user-name').textContent = currentUser;
+            
+            // Limpa os campos
+            document.getElementById('login-user').value = '';
+            document.getElementById('login-pass').value = '';
         } else {
-            errorMsg.style.display = 'block';
+            showMessage('login-msg', 'Usuário ou senha incorretos.', true);
         }
     }
 
     function logout() {
+        currentUser = "";
         document.getElementById('app-section').style.display = 'none';
         document.getElementById('result-section').style.display = 'none';
         document.getElementById('auth-section').style.display = 'block';
         document.getElementById('ticket-content').value = '';
+        hideMessages();
     }
 
-    // --- CAMADA DE SANITIZAÇÃO (Proteger Informações Sensíveis) ---
     function sanitizeText(text) {
-        let originalText = text;
-        // Regex para capturar padrões comuns de credenciais indicadas no escopo
         const patterns = [
             /(senha|password|pass|pwd)[\s:=-]+(\S+)/gi,
             /(token|bearer|jwt)[\s:=-]+([a-zA-Z0-9\.\-_]{15,})/gi,
@@ -203,42 +334,38 @@
             }
         });
 
-        // Mascarar IPs internos genéricos (exemplo simples)
         sanitized = sanitized.replace(/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})/g, "[infraestrutura_oculta]");
 
         return { sanitized, foundCredentials };
     }
 
-    // --- MOTOR DE TRIAGEM E DIAGNÓSTICO ---
     function processTicket() {
+        hideMessages();
         const rawText = document.getElementById('ticket-content').value;
         
-        // Verifica comando de logout
         if (rawText.trim().toLowerCase() === LOGOUT_COMMAND) {
             logout();
             return;
         }
 
         if(rawText.trim() === '') {
-            alert("O ticket está vazio.");
+            showMessage('ticket-msg', 'O ticket não pode estar vazio.', true);
             return;
         }
 
         const { sanitized, foundCredentials } = sanitizeText(rawText);
 
-        // Simulador de Análise do LLM (regras de negócio aplicadas)
         let priority = "P4";
         let isCritical = false;
         let isHigh = false;
         
         const lowerText = sanitized.toLowerCase();
         
-        // Regra de não inventar P1 só por palavras como "urgente", mas checar evidências de interrupção
         if (lowerText.includes("fora do ar") || lowerText.includes("indisponível") || lowerText.includes("caiu o servidor")) {
-            priority = "P2"; // P2 por padrão na indisponibilidade, sem mais evidências
+            priority = "P2";
             isHigh = true;
             if (lowerText.includes("todos os usuários") || lowerText.includes("operação parada") || lowerText.includes("vazamento")) {
-                priority = "P1"; // P1 confirmado por evidência de impacto amplo
+                priority = "P1";
                 isCritical = true;
             }
         } else if (lowerText.includes("erro") || lowerText.includes("falha") || lowerText.includes("não consigo")) {
@@ -250,22 +377,20 @@
         generateReport(sanitized, foundCredentials, priority, isCritical, isHigh);
     }
 
-    // --- GERAÇÃO DO FORMATO DE SAÍDA OBRIGATÓRIO ---
     function generateReport(ticketText, hasCredentials, priority, isCritical, isHigh) {
         document.getElementById('app-section').style.display = 'none';
         document.getElementById('result-section').style.display = 'block';
 
         const reportBox = document.getElementById('report-output');
         
-        // O Agente NUNCA inventa dados. Preenche baseado no que tem ou acusa ausência.
         const html = `
             <h2>TRIAGEM DO TICKET</h2>
+            <p><strong>Operador:</strong> ${currentUser}</p>
             <p><strong>Status:</strong> Processado Automaticamente</p>
             <p><strong>Categoria:</strong> ${isHigh || isCritical ? 'Incidente' : 'Solicitação/Dúvida'}</p>
             <p><strong>Prioridade:</strong> ${priority}</p>
             <p><strong>Impacto:</strong> ${isCritical ? 'Amplo / Operação Afetada' : (isHigh ? 'Moderado / Serviço Afetado' : 'Baixo / Individual (Evidência Restrita)')}</p>
             <p><strong>Urgência:</strong> ${priority === 'P1' || priority === 'P2' ? 'Alta' : (priority === 'Provisória' ? 'Não determinável sem evidências' : 'Normal')}</p>
-            <p><strong>Quantidade de problemas identificados:</strong> 1 (Análise básica via simulador)</p>
             
             <hr>
 
@@ -285,30 +410,10 @@
             <ul>
                 <li>"${ticketText.substring(0, 100)}..."</li>
             </ul>
-            <h3>Informações não validadas</h3>
-            <ul>
-                <li>Causa raiz do problema relatado não confirmada por logs na descrição.</li>
-            </ul>
             <h3>Hipóteses</h3>
             <ul>
                 <li>Falha de comunicação ou indisponibilidade temporária de rota/serviço.</li>
             </ul>
-            <h3>Informações ausentes</h3>
-            <ul>
-                ${ticketText.length < 50 ? '<li><strong>Detalhes do erro insuficientes.</strong> Necessário log ou print.</li>' : '<li>Nomes exatos de sistemas/servidores envolvidos não especificados de forma técnica.</li>'}
-            </ul>
-
-            <hr>
-
-            <h2>SOLUÇÃO PARA CADA PROBLEMA</h2>
-            <h3>Problema 1</h3>
-            <p><strong>Descrição:</strong> Relato de anomalia baseado no texto fornecido ("${ticketText.substring(0, 30)}...").</p>
-            <p><strong>Prioridade:</strong> ${priority}</p>
-            <p><strong>Evidências:</strong> Apenas o relato do usuário. Nenhuma evidência de log anexada ao texto inicial.</p>
-            <p><strong>Solução documentada:</strong> Não há evidência suficiente para determinar uma solução exata neste momento.</p>
-            <p><strong>Diagnóstico N1:</strong> Iniciar validação primária de conexão e coleta de logs.</p>
-            <p><strong>Informações adicionais necessárias:</strong> Prints do erro, tela de falha ou comportamento esperado vs atual.</p>
-            <p><strong>Escalonamento:</strong> Não aplicável até que as informações adicionais sejam coletadas pelo N1.</p>
 
             <hr>
 
@@ -321,21 +426,6 @@
                 <li>Se o teste de conectividade primário falhar, verificar bloqueios de rede.</li>
             </ol>
             <p><strong>CONDIÇÃO DE ESCALONAMENTO:</strong> Encaminhar para N2/Infraestrutura APÓS anexar logs confirmando que o erro não se trata de configuração de usuário ou credencial inválida.</p>
-
-            <hr>
-
-            <h2>ESCALONAMENTO</h2>
-            <p><strong>Necessita escalonamento:</strong> Não (Imediato).</p>
-            <p><strong>Motivo:</strong> Informação insuficiente para determinar com segurança a equipe de destino sem antes realizar o triage N1 (Roteiro acima).</p>
-            <p><strong>Informação necessária para escalonamento:</strong> Logs de erro ou confirmação de indisponibilidade de infraestrutura.</p>
-            
-            <hr>
-
-            <h2>FONTES UTILIZADAS</h2>
-            <ul>
-                <li>Ticket (Fornecido pelo operador)</li>
-                <li>Protocolos Genéricos N1 (Motor de inferência conservadora sem invenção)</li>
-            </ul>
         `;
         reportBox.innerHTML = html;
     }
@@ -344,6 +434,7 @@
         document.getElementById('ticket-content').value = '';
         document.getElementById('result-section').style.display = 'none';
         document.getElementById('app-section').style.display = 'block';
+        hideMessages();
     }
 </script>
 
