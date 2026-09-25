@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agente N1 - Triagem IA</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --primary: #2c3e50;
+            --secondary: #34495e;
+            --accent: #3498db;
+            --danger: #e74c3c;
+            --text-main: #333;
+            --text-light: #fff;
+            --border: #ccc;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            background: var(--text-light);
+            width: 100%;
+            max-width: 800px;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            color: var(--primary);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="password"], input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: monospace;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 150px;
+        }
+        button {
+            background-color: var(--accent);
+            color: var(--text-light);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .btn-danger {
+            background-color: var(--danger);
+        }
+        .btn-danger:hover {
+            background-color: #c0392b;
+        }
+        #app-section, #result-section {
+            display: none;
+        }
+        .report-box {
+            background: #fdfdfd;
+            border: 1px solid var(--border);
+            padding: 20px;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .report-box h2 {
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 5px;
+            margin-top: 30px;
+        }
+        .badge {
+            background: #e67e22;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        .header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <!-- CAMADA DE AUTENTICAÇÃO -->
+    <div id="auth-section">
+        <h1>🔒 Autenticação do Agente N1</h1>
+        <p>Insira as credenciais autorizadas para iniciar o motor de triagem.</p>
+        <div class="form-group">
+            <label for="pass">Senha de Autenticação:</label>
+            <input type="password" id="pass" placeholder="Digite a senha">
+        </div>
+        <div class="form-group">
+            <label for="token">Token/API:</label>
+            <input type="password" id="token" placeholder="Digite o token">
+        </div>
+        <button onclick="authenticate()">Autenticar</button>
+        <p id="auth-error" style="color: var(--danger); font-weight: bold; display: none;">Autenticação recusada. O processamento do ticket não será iniciado.</p>
+    </div>
+
+    <!-- CAMADA DE ENTRADA DO TICKET -->
+    <div id="app-section">
+        <div class="header-actions">
+            <h1>📥 Triagem de Ticket</h1>
+            <button class="btn-danger" onclick="logout()">Deslogar (vaca)</button>
+        </div>
+        <p>Cole o conteúdo do ticket abaixo. O sistema protegerá informações sensíveis e gerará o roteiro automaticamente.</p>
+        <p><em>Dica: Para forçar o logout por comando, digite apenas a palavra <strong>vaca</strong> no ticket e processe.</em></p>
+        <div class="form-group">
+            <label for="ticket-content">Conteúdo do Ticket:</label>
+            <textarea id="ticket-content" placeholder="Ex: O sistema está fora do ar e quando tento acessar aparece erro. Minha senha é 12345abcd..."></textarea>
+        </div>
+        <button onclick="processTicket()">Analisar e Triar</button>
+    </div>
+
+    <!-- CAMADA DE DIAGNÓSTICO E AUDITORIA (RESULTADO) -->
+    <div id="result-section">
+        <div class="report-box" id="report-output">
+            <!-- O relatório será injetado aqui via JS -->
+        </div>
+        <br>
+        <button onclick="resetApp()">Nova Triagem</button>
+    </div>
+
+</div>
+
+<script>
+    // --- PILAR 2 & 5: AUTENTICAÇÃO SEGURA ---
+    // (Em um ambiente real, esta validação ocorreria puramente no backend. 
+    // Como solicitado um programa em HTML, a lógica está isolada aqui.)
+    const SECRET_CONFIG_PASSWORD = "123456";
+    const SECRET_CONFIG_TOKEN = "luis";
+    const LOGOUT_COMMAND = "vaca";
+
+    function authenticate() {
+        const pass = document.getElementById('pass').value;
+        const token = document.getElementById('token').value;
+        const errorMsg = document.getElementById('auth-error');
+
+        if (pass === SECRET_CONFIG_PASSWORD && token === SECRET_CONFIG_TOKEN) {
+            document.getElementById('auth-section').style.display = 'none';
+            document.getElementById('app-section').style.display = 'block';
+            errorMsg.style.display = 'none';
+            document.getElementById('pass').value = '';
+            document.getElementById('token').value = '';
+        } else {
+            errorMsg.style.display = 'block';
+        }
+    }
+
+    function logout() {
+        document.getElementById('app-section').style.display = 'none';
+        document.getElementById('result-section').style.display = 'none';
+        document.getElementById('auth-section').style.display = 'block';
+        document.getElementById('ticket-content').value = '';
+    }
+
+    // --- CAMADA DE SANITIZAÇÃO (Proteger Informações Sensíveis) ---
+    function sanitizeText(text) {
+        let originalText = text;
+        // Regex para capturar padrões comuns de credenciais indicadas no escopo
+        const patterns = [
+            /(senha|password|pass|pwd)[\s:=-]+(\S+)/gi,
+            /(token|bearer|jwt)[\s:=-]+([a-zA-Z0-9\.\-_]{15,})/gi,
+            /(api_key|apikey|chave|secret|private_key)[\s:=-]+(\S+)/gi
+        ];
+
+        let sanitized = text;
+        let foundCredentials = false;
+
+        patterns.forEach(regex => {
+            if (regex.test(sanitized)) {
+                foundCredentials = true;
+                sanitized = sanitized.replace(regex, "$1: [credencial_oculta]");
+            }
+        });
+
+        // Mascarar IPs internos genéricos (exemplo simples)
+        sanitized = sanitized.replace(/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})/g, "[infraestrutura_oculta]");
+
+        return { sanitized, foundCredentials };
+    }
+
+    // --- MOTOR DE TRIAGEM E DIAGNÓSTICO ---
+    function processTicket() {
+        const rawText = document.getElementById('ticket-content').value;
+        
+        // Verifica comando de logout
+        if (rawText.trim().toLowerCase() === LOGOUT_COMMAND) {
+            logout();
+            return;
+        }
+
+        if(rawText.trim() === '') {
+            alert("O ticket está vazio.");
+            return;
+        }
+
+        const { sanitized, foundCredentials } = sanitizeText(rawText);
+
+        // Simulador de Análise do LLM (regras de negócio aplicadas)
+        let priority = "P4";
+        let isCritical = false;
+        let isHigh = false;
+        
+        const lowerText = sanitized.toLowerCase();
+        
+        // Regra de não inventar P1 só por palavras como "urgente", mas checar evidências de interrupção
+        if (lowerText.includes("fora do ar") || lowerText.includes("indisponível") || lowerText.includes("caiu o servidor")) {
+            priority = "P2"; // P2 por padrão na indisponibilidade, sem mais evidências
+            isHigh = true;
+            if (lowerText.includes("todos os usuários") || lowerText.includes("operação parada") || lowerText.includes("vazamento")) {
+                priority = "P1"; // P1 confirmado por evidência de impacto amplo
+                isCritical = true;
+            }
+        } else if (lowerText.includes("erro") || lowerText.includes("falha") || lowerText.includes("não consigo")) {
+            priority = "P3";
+        } else if (lowerText.includes("informação insuficiente") || lowerText.trim().length < 15) {
+            priority = "Provisória";
+        }
+
+        generateReport(sanitized, foundCredentials, priority, isCritical, isHigh);
+    }
+
+    // --- GERAÇÃO DO FORMATO DE SAÍDA OBRIGATÓRIO ---
+    function generateReport(ticketText, hasCredentials, priority, isCritical, isHigh) {
+        document.getElementById('app-section').style.display = 'none';
+        document.getElementById('result-section').style.display = 'block';
+
+        const reportBox = document.getElementById('report-output');
+        
+        // O Agente NUNCA inventa dados. Preenche baseado no que tem ou acusa ausência.
+        const html = `
+            <h2>TRIAGEM DO TICKET</h2>
+            <p><strong>Status:</strong> Processado Automaticamente</p>
+            <p><strong>Categoria:</strong> ${isHigh || isCritical ? 'Incidente' : 'Solicitação/Dúvida'}</p>
+            <p><strong>Prioridade:</strong> ${priority}</p>
+            <p><strong>Impacto:</strong> ${isCritical ? 'Amplo / Operação Afetada' : (isHigh ? 'Moderado / Serviço Afetado' : 'Baixo / Individual (Evidência Restrita)')}</p>
+            <p><strong>Urgência:</strong> ${priority === 'P1' || priority === 'P2' ? 'Alta' : (priority === 'Provisória' ? 'Não determinável sem evidências' : 'Normal')}</p>
+            <p><strong>Quantidade de problemas identificados:</strong> 1 (Análise básica via simulador)</p>
+            
+            <hr>
+
+            <h2>SEGURANÇA</h2>
+            <p><strong>Credenciais detectadas:</strong> ${hasCredentials ? 'Sim' : 'Não'}</p>
+            <p><strong>Credenciais mascaradas:</strong> ${hasCredentials ? 'Sim' : 'Não se aplica'}</p>
+            ${hasCredentials ? '<p><em>Ação: Valores substituídos com sucesso pela tag <span class="badge">[credencial_oculta]</span>.</em></p>' : ''}
+            
+            <hr>
+
+            <h2>EVIDÊNCIAS</h2>
+            <h3>Informações confirmadas</h3>
+            <ul>
+                <li>Ticket recebido e processado na data/hora atual via sistema.</li>
+            </ul>
+            <h3>Informações relatadas pelo usuário</h3>
+            <ul>
+                <li>"${ticketText.substring(0, 100)}..."</li>
+            </ul>
+            <h3>Informações não validadas</h3>
+            <ul>
+                <li>Causa raiz do problema relatado não confirmada por logs na descrição.</li>
+            </ul>
+            <h3>Hipóteses</h3>
+            <ul>
+                <li>Falha de comunicação ou indisponibilidade temporária de rota/serviço.</li>
+            </ul>
+            <h3>Informações ausentes</h3>
+            <ul>
+                ${ticketText.length < 50 ? '<li><strong>Detalhes do erro insuficientes.</strong> Necessário log ou print.</li>' : '<li>Nomes exatos de sistemas/servidores envolvidos não especificados de forma técnica.</li>'}
+            </ul>
+
+            <hr>
+
+            <h2>SOLUÇÃO PARA CADA PROBLEMA</h2>
+            <h3>Problema 1</h3>
+            <p><strong>Descrição:</strong> Relato de anomalia baseado no texto fornecido ("${ticketText.substring(0, 30)}...").</p>
+            <p><strong>Prioridade:</strong> ${priority}</p>
+            <p><strong>Evidências:</strong> Apenas o relato do usuário. Nenhuma evidência de log anexada ao texto inicial.</p>
+            <p><strong>Solução documentada:</strong> Não há evidência suficiente para determinar uma solução exata neste momento.</p>
+            <p><strong>Diagnóstico N1:</strong> Iniciar validação primária de conexão e coleta de logs.</p>
+            <p><strong>Informações adicionais necessárias:</strong> Prints do erro, tela de falha ou comportamento esperado vs atual.</p>
+            <p><strong>Escalonamento:</strong> Não aplicável até que as informações adicionais sejam coletadas pelo N1.</p>
+
+            <hr>
+
+            <h2>ROTEIRO N1</h2>
+            <p><strong>OBJETIVO:</strong> Validar a veracidade do relato e isolar a camada do problema sem inferir dados não presentes.</p>
+            <ol>
+                <li>Entrar em contato com o usuário para solicitar um print ou código exato do erro.</li>
+                <li>Verificar no painel de monitoramento se há indisponibilidade sistêmica global.</li>
+                <li>Se o erro for reprodutível localmente, documentar os passos.</li>
+                <li>Se o teste de conectividade primário falhar, verificar bloqueios de rede.</li>
+            </ol>
+            <p><strong>CONDIÇÃO DE ESCALONAMENTO:</strong> Encaminhar para N2/Infraestrutura APÓS anexar logs confirmando que o erro não se trata de configuração de usuário ou credencial inválida.</p>
+
+            <hr>
+
+            <h2>ESCALONAMENTO</h2>
+            <p><strong>Necessita escalonamento:</strong> Não (Imediato).</p>
+            <p><strong>Motivo:</strong> Informação insuficiente para determinar com segurança a equipe de destino sem antes realizar o triage N1 (Roteiro acima).</p>
+            <p><strong>Informação necessária para escalonamento:</strong> Logs de erro ou confirmação de indisponibilidade de infraestrutura.</p>
+            
+            <hr>
+
+            <h2>FONTES UTILIZADAS</h2>
+            <ul>
+                <li>Ticket (Fornecido pelo operador)</li>
+                <li>Protocolos Genéricos N1 (Motor de inferência conservadora sem invenção)</li>
+            </ul>
+        `;
+        reportBox.innerHTML = html;
+    }
+
+    function resetApp() {
+        document.getElementById('ticket-content').value = '';
+        document.getElementById('result-section').style.display = 'none';
+        document.getElementById('app-section').style.display = 'block';
+    }
+</script>
+
+</body>
+</html>
